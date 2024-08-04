@@ -1,0 +1,49 @@
+import os
+import email
+import imaplib
+from telegram import Bot
+
+# Configuration for connecting to ERP via IMAP and sending the door code via Telegram
+IMAP_SERVER = 'imap.example.com'
+IMAP_USER = 'hotel@example.com'
+IMAP_PASS = 'password'
+TELEGRAM_TOKEN = 'your-telegram-bot-token'
+
+# Connect to the email inbox
+mail = imaplib.IMAP4_SSL(IMAP_SERVER)
+mail.login(IMAP_USER, IMAP_PASS)
+mail.select('inbox')
+
+# Search for emails from ERP
+status, messages = mail.search(None, '(FROM "erp@example.com")')
+
+# Fetch the latest email
+latest_email_id = messages[0].split()[-1]
+status, data = mail.fetch(latest_email_id, '(RFC822)')
+raw_email = data[0][1]
+
+# Parse the email
+msg = email.message_from_bytes(raw_email)
+if msg.is_multipart():
+    for part in msg.walk():
+        if part.get_content_type() == 'text/plain':
+            email_text = part.get_payload(decode=True).decode()
+else:
+    email_text = msg.get_payload(decode=True).decode()
+
+# Extract the door code from the email text
+door_code = email_text.split('Door Code: ')[1][:4]
+
+# Extract the customer's phone number from the email
+phone_number = email_text.split('Phone Number: ')[1].split()[0]
+
+# Format the phone number for Telegram (if needed)
+if not phone_number.startswith('+'):
+    phone_number = f'+{phone_number}'
+
+# Send the door code via Telegram
+bot = Bot(token=TELEGRAM_TOKEN)
+bot.send_message(chat_id=phone_number, text=f'Your door code is: {door_code}')
+
+# Logout from the email server
+mail.logout()
